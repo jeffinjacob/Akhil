@@ -1,0 +1,47 @@
+const fetch = require('node-fetch');
+const fs = require('fs');
+const zlib = require('zlib');
+
+const url = 'https://dev69973.service-now.com/api/now/attachment/11f1e367db2423002a66364e9d9619bd/file';
+const options = {
+  headers: {
+    'Authorization': 'Basic c2xhY2s6c2xhY2s='
+  }
+};
+
+fetch(url, options)
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const contentEncoding = response.headers.get('content-encoding');
+
+    if (contentEncoding === 'gzip') {
+      return response.buffer().then(buffer => {
+        return new Promise((resolve, reject) => {
+          zlib.gunzip(buffer, (err, decompressedBuffer) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(decompressedBuffer);
+            }
+          });
+        });
+      });
+    } else {
+      return response.buffer();
+    }
+  })
+  .then(data => {
+    fs.writeFile('outputfile.png', data, (err) => {
+      if (err) {
+        console.error('Error writing file:', err);
+      } else {
+        console.log('File saved as outputfile.png');
+      }
+    });
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });

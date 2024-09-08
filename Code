@@ -1,56 +1,56 @@
-const zlib = require('zlib'); // Make sure zlib is required correctly
-const fetch = require('node-fetch'); // For node-fetch in Node.js environment
+In the frontend, if you receive a buffer (often an `ArrayBuffer` in JavaScript), you can convert it to a downloadable file using the `Blob` and `URL.createObjectURL()` APIs. Here's how you can handle the buffer and allow users to download it as a file in React.
 
-async function downloadFromSnow(req) {
-    const user = await verifyOktaToken(req.headers); // Token verification
-    try {
-        const { attach_id } = req?.query;
-        const reqHeaders = await getServiceNowRequestHeader();
-        const apiUrl = `${config.serviceNow.apiBaseUrl}/eplc/essdocumentmanage/download?attach_id=${attach_id}`;
-        
-        const requestOptions = {
-            method: 'GET',
-            headers: reqHeaders
-        };
+### Steps:
+1. **Receive the buffer in the frontend (usually as an `ArrayBuffer`)**.
+2. **Convert the `ArrayBuffer` to a `Blob`**, which can be treated as a file.
+3. **Create a downloadable link** using `URL.createObjectURL()` and trigger a download.
 
-        const result = await fetch(apiUrl, requestOptions);
+### Example Code:
 
-        // Check if request was successful
-        if (!result.ok) {
-            throw new Error(`HTTP error! Status: ${result.status}`);
-        }
+```javascript
+import React from 'react';
 
-        const contentEncoding = result.headers.get('content-encoding');
-        let data;
+const DownloadFileComponent = () => {
 
-        // Check for gzip encoding
-        if (contentEncoding === 'gzip') {
-            const buffer = await result.buffer();
-            try {
-                data = await new Promise((resolve, reject) => {
-                    zlib.gunzip(buffer, (err, decompressedBuffer) => {
-                        if (err) {
-                            reject(err); // Reject if decompression fails
-                        } else {
-                            resolve(decompressedBuffer);
-                        }
-                    });
-                });
-            } catch (gzipError) {
-                console.error('GZIP Decompression failed:', gzipError);
-                throw new Error('Decompression failed. Z_DATA_ERROR encountered.');
+    const downloadFile = async () => {
+        try {
+            // Make a request to the API that returns the buffer (ArrayBuffer in browser)
+            const response = await fetch('https://example.com/your-api-endpoint', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Add any necessary headers
+                }
+            });
+
+            // Check if the response was successful
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        } else {
-            // If not gzipped, just return the buffer directly
-            data = await result.buffer();
+
+            // Get the ArrayBuffer from the response (similar to Buffer in Node.js)
+            const buffer = await response.arrayBuffer();
+
+            // Create a Blob from the ArrayBuffer
+            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+
+            // Create a link element, set its href to a Blob URL, and click it programmatically
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+
+            // Specify the file name
+            link.download = 'downloaded_file.png'; // Adjust file extension based on type
+
+            // Programmatically click the link to trigger the download
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up and remove the link
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Download failed:', error);
         }
+    };
 
-        // Process the data as needed (e.g., save or return)
-        data.status = 200;
-        return data;
-
-    } catch (error) {
-        console.error('Error:', error);
-        throw { ...error, ...user }; // Attach user info to the error if necessary
-    }
-}
+    return (
+        <

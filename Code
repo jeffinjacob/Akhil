@@ -1,8 +1,8 @@
-const zlib = require('zlib'); // Make sure you have zlib imported
-const fetch = require('node-fetch'); // Ensure you're using node-fetch in a Node.js environment
+const zlib = require('zlib'); // Make sure zlib is required correctly
+const fetch = require('node-fetch'); // For node-fetch in Node.js environment
 
 async function downloadFromSnow(req) {
-    const user = await verifyOktaToken(req.headers); // Ensure the token is verified
+    const user = await verifyOktaToken(req.headers); // Token verification
     try {
         const { attach_id } = req?.query;
         const reqHeaders = await getServiceNowRequestHeader();
@@ -15,36 +15,42 @@ async function downloadFromSnow(req) {
 
         const result = await fetch(apiUrl, requestOptions);
 
-        // Check if the request was successful
+        // Check if request was successful
         if (!result.ok) {
             throw new Error(`HTTP error! Status: ${result.status}`);
         }
 
         const contentEncoding = result.headers.get('content-encoding');
-
-        // Handle gzip-encoded responses
         let data;
+
+        // Check for gzip encoding
         if (contentEncoding === 'gzip') {
             const buffer = await result.buffer();
-            data = await new Promise((resolve, reject) => {
-                zlib.gunzip(buffer, (err, decompressedBuffer) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(decompressedBuffer);
-                    }
+            try {
+                data = await new Promise((resolve, reject) => {
+                    zlib.gunzip(buffer, (err, decompressedBuffer) => {
+                        if (err) {
+                            reject(err); // Reject if decompression fails
+                        } else {
+                            resolve(decompressedBuffer);
+                        }
+                    });
                 });
-            });
+            } catch (gzipError) {
+                console.error('GZIP Decompression failed:', gzipError);
+                throw new Error('Decompression failed. Z_DATA_ERROR encountered.');
+            }
         } else {
-            data = await result.buffer(); // Get the data if not gzipped
+            // If not gzipped, just return the buffer directly
+            data = await result.buffer();
         }
 
-        // Process the file data or send it in response
+        // Process the data as needed (e.g., save or return)
         data.status = 200;
-        return data; // Return the response data, possibly to save or serve the file
+        return data;
 
     } catch (error) {
         console.error('Error:', error);
-        throw { ...error, ...user }; // Attach the user info to the error if needed
+        throw { ...error, ...user }; // Attach user info to the error if necessary
     }
 }

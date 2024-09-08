@@ -1,47 +1,50 @@
-const fetch = require('node-fetch');
-const fs = require('fs');
-const zlib = require('zlib');
+const zlib = require('zlib'); // Make sure you have zlib imported
+const fetch = require('node-fetch'); // Ensure you're using node-fetch in a Node.js environment
 
-const url = 'https://dev69973.service-now.com/api/now/attachment/11f1e367db2423002a66364e9d9619bd/file';
-const options = {
-  headers: {
-    'Authorization': 'Basic c2xhY2s6c2xhY2s='
-  }
-};
+async function downloadFromSnow(req) {
+    const user = await verifyOktaToken(req.headers); // Ensure the token is verified
+    try {
+        const { attach_id } = req?.query;
+        const reqHeaders = await getServiceNowRequestHeader();
+        const apiUrl = `${config.serviceNow.apiBaseUrl}/eplc/essdocumentmanage/download?attach_id=${attach_id}`;
+        
+        const requestOptions = {
+            method: 'GET',
+            headers: reqHeaders
+        };
 
-fetch(url, options)
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+        const result = await fetch(apiUrl, requestOptions);
+
+        // Check if the request was successful
+        if (!result.ok) {
+            throw new Error(`HTTP error! Status: ${result.status}`);
+        }
+
+        const contentEncoding = result.headers.get('content-encoding');
+
+        // Handle gzip-encoded responses
+        let data;
+        if (contentEncoding === 'gzip') {
+            const buffer = await result.buffer();
+            data = await new Promise((resolve, reject) => {
+                zlib.gunzip(buffer, (err, decompressedBuffer) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(decompressedBuffer);
+                    }
+                });
+            });
+        } else {
+            data = await result.buffer(); // Get the data if not gzipped
+        }
+
+        // Process the file data or send it in response
+        data.status = 200;
+        return data; // Return the response data, possibly to save or serve the file
+
+    } catch (error) {
+        console.error('Error:', error);
+        throw { ...error, ...user }; // Attach the user info to the error if needed
     }
-
-    const contentEncoding = response.headers.get('content-encoding');
-
-    if (contentEncoding === 'gzip') {
-      return response.buffer().then(buffer => {
-        return new Promise((resolve, reject) => {
-          zlib.gunzip(buffer, (err, decompressedBuffer) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(decompressedBuffer);
-            }
-          });
-        });
-      });
-    } else {
-      return response.buffer();
-    }
-  })
-  .then(data => {
-    fs.writeFile('outputfile.png', data, (err) => {
-      if (err) {
-        console.error('Error writing file:', err);
-      } else {
-        console.log('File saved as outputfile.png');
-      }
-    });
-  })
-  .catch(error => {
-    console.error('Error:', error);
-  });
+}
